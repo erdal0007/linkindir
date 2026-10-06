@@ -1,0 +1,12 @@
+name: linkindir
+services:
+  - name: web
+    type: web
+    git:
+      repository: github.com/erdal0007/linkindir
+      branch: main
+      builder: dockerfile
+    instance_type: free
+    ports:
+      - port: 8000
+        protocol: http

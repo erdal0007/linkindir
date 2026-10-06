@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#102A43">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg">
+<title>LinkIndir</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#102A43; --ink:#243B53; --mist:#829AB1; --paper:#F0F4F8; --card:#FFFFFF;
+    --amber:#F0B429; --amber-deep:#CB8A04; --ok:#27AB83; --err:#E12D39;
+    --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:Manrope,system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:var(--paper); color:var(--ink);
+    padding:calc(var(--sat) + 20px) 18px calc(var(--sab) + 28px);
+    max-width:480px; margin:0 auto; -webkit-font-smoothing:antialiased;
+  }
+  header{display:flex;align-items:baseline;gap:10px;margin-bottom:28px}
+  header h1{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--navy)}
+  header span{font-size:13px;color:var(--mist);font-weight:500}
+
+  /* Yapıştırma alanı — sayfanın ana ögesi */
+  .paste{
+    background:var(--navy); border-radius:22px; padding:22px 20px 18px;
+    color:#fff; box-shadow:0 14px 34px -18px rgba(16,42,67,.55);
+  }
+  .paste label{display:block;font-size:15px;font-weight:700;margin-bottom:12px;color:#D9E2EC}
+  .paste .row{display:flex;gap:8px}
+  .paste input{
+    flex:1; min-width:0; font:inherit; font-size:16px; font-weight:500;
+    background:rgba(255,255,255,.08); border:1.5px solid rgba(255,255,255,.18);
+    color:#fff; border-radius:14px; padding:14px 14px; outline:none;
+  }
+  .paste input::placeholder{color:#9FB3C8}
+  .paste input:focus-visible{border-color:var(--amber);box-shadow:0 0 0 3px rgba(240,180,41,.3)}
+  .paste button.secondary{
+    font:inherit;font-size:14px;font-weight:700;background:transparent;color:#D9E2EC;
+    border:1.5px solid rgba(255,255,255,.25);border-radius:14px;padding:0 14px;cursor:pointer;
+  }
+  .modes{display:flex;gap:8px;margin-top:14px}
+  .modes button{
+    flex:1;font:inherit;font-size:14px;font-weight:700;padding:10px;border-radius:12px;cursor:pointer;
+    background:transparent;color:#BCCCDC;border:1.5px solid rgba(255,255,255,.18);
+  }
+  .modes button[aria-pressed="true"]{background:var(--amber);color:var(--navy);border-color:var(--amber)}
+
+  /* Büyük indir butonu — dolarak ilerler */
+  .go{
+    position:relative; overflow:hidden; width:100%; margin-top:16px;
+    font:inherit; font-size:18px; font-weight:800; color:var(--navy);
+    background:var(--amber); border:0; border-radius:16px; padding:18px; cursor:pointer;
+    transition:transform .08s;
+  }
+  .go:active{transform:scale(.985)}
+  .go:disabled{cursor:progress}
+  .go .fill{position:absolute;inset:0;width:0;background:var(--amber-deep);transition:width .4s ease}
+  .go .txt{position:relative}
+  .go:focus-visible{outline:3px solid #fff;outline-offset:2px}
+
+  /* Önizleme */
+  .preview{
+    display:none; margin-top:18px; background:var(--card); border-radius:18px; overflow:hidden;
+    border:1px solid #D9E2EC;
+  }
+  .preview.show{display:block}
+  .preview img{width:100%;aspect-ratio:16/9;object-fit:cover;display:block;background:#D9E2EC}
+  .preview .meta{padding:14px 16px 16px}
+  .preview h2{font-size:16px;font-weight:700;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .preview p{margin-top:6px;font-size:13px;color:var(--mist);font-weight:500}
+
+  .msg{margin-top:16px;font-size:14px;font-weight:600;line-height:1.5;padding:12px 14px;border-radius:12px;display:none}
+  .msg.err{display:block;background:#FFE3E3;color:#A61B1B}
+  .msg.ok{display:block;background:#E3F9E5;color:#0C6B58}
+  .msg.info{display:block;background:#E0EAF4;color:var(--ink)}
+
+  .hint{margin-top:26px;font-size:13px;color:var(--mist);line-height:1.6;font-weight:500}
+  .hint b{color:var(--ink)}
+  @media (prefers-reduced-motion:reduce){.go .fill{transition:none}.go{transition:none}}
+</style>
+</head>
+<body>
+<header><h1>LinkIndir</h1><span>bağlantıyı yapıştır, telefona indir</span></header>
+
+<section class="paste">
+  <label for="url">Video bağlantısı</label>
+  <div class="row">
+    <input id="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off"
+           placeholder="https://www.instagram.com/reel/…" enterkeyhint="go">
+    <button class="secondary" id="pasteBtn" type="button">Yapıştır</button>
+  </div>
+  <div class="modes" role="group" aria-label="İndirme türü">
+    <button type="button" data-mode="video" aria-pressed="true">Video (mp4)</button>
+    <button type="button" data-mode="audio" aria-pressed="false">Sadece ses (mp3)</button>
+  </div>
+  <button class="go" id="go" type="button"><span class="fill"></span><span class="txt">İndir</span></button>
+</section>
+
+<section class="preview" id="preview" aria-live="polite">
+  <img id="thumb" alt="">
+  <div class="meta"><h2 id="title"></h2><p id="sub"></p></div>
+</section>
+
+<div class="msg" id="msg" role="status"></div>
+
+<p class="hint">
+  Instagram, YouTube, TikTok, X, Facebook ve yüzlerce site çalışır.<br>
+  İndirilen dosya telefonun <b>İndirilenler</b> klasörüne kaydedilir. Uygulama simgesi için tarayıcıdan <b>Ana ekrana ekle</b>.
+</p>
+
+<script>
+const $=s=>document.querySelector(s);
+const url=$('#url'), go=$('#go'), fill=go.querySelector('.fill'), txt=go.querySelector('.txt');
+const msg=$('#msg'), preview=$('#preview');
+let mode='video', busy=false;
+
+document.querySelectorAll('.modes button').forEach(b=>b.onclick=()=>{
+  mode=b.dataset.mode;
+  document.querySelectorAll('.modes button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+});
+$('#pasteBtn').onclick=async()=>{
+  try{ url.value=(await navigator.clipboard.readText()).trim(); fetchInfo(); }
+  catch{ show('info','Panoya erişilemedi; bağlantıyı elle yapıştır.'); }
+};
+url.addEventListener('change',fetchInfo);
+url.addEventListener('keydown',e=>{ if(e.key==='Enter') start(); });
+go.onclick=start;
+
+// Paylaş menüsünden gelen link (?url=...)
+const shared=new URLSearchParams(location.search).get('url');
+if(shared){ url.value=shared; fetchInfo(); }
+
+function show(kind,text){ msg.className='msg '+kind; msg.textContent=text; }
+function hide(){ msg.className='msg'; }
+function fmt(s){ if(!s) return ''; s=Math.round(s); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
+
+async function fetchInfo(){
+  const u=url.value.trim(); if(!u) return;
+  preview.classList.remove('show'); hide();
+  try{
+    const r=await fetch('/api/info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u,mode})});
+    if(!r.ok) throw new Error((await r.json()).detail);
+    const i=await r.json();
+    $('#thumb').src=i.thumbnail||''; $('#title').textContent=i.title||'';
+    $('#sub').textContent=[i.site,i.uploader,fmt(i.duration)].filter(Boolean).join('  ·  ');
+    preview.classList.add('show');
+  }catch(e){ show('err',e.message); }
+}
+
+async function start(){
+  const u=url.value.trim();
+  if(!u) return show('err','Önce bir bağlantı yapıştır.');
+  if(busy) return;
+  busy=true; go.disabled=true; hide();
+  txt.textContent='Hazırlanıyor…'; let p=5; fill.style.width=p+'%';
+  const tick=setInterval(()=>{ if(p<88){ p+=Math.max(1,(88-p)*.08); fill.style.width=p+'%'; } },500);
+  try{
+    const r=await fetch('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u,mode})});
+    if(!r.ok) throw new Error((await r.json()).detail);
+    txt.textContent='Telefona kaydediliyor…';
+    const blob=await r.blob();
+    const cd=r.headers.get('Content-Disposition')||'';
+    const m=/filename\*?=(?:UTF-8'')?"?([^";]+)/i.exec(cd);
+    const name=m?decodeURIComponent(m[1]):(mode==='audio'?'ses.mp3':'video.mp4');
+    const file=new File([blob],name,{type:blob.type});
+    // iPhone'da Dosyalar/Fotoğraflar'a kaydetmek için paylaşım sayfası daha güvenilir
+    if(navigator.canShare && navigator.canShare({files:[file]}) && /iPhone|iPad/.test(navigator.userAgent)){
+      await navigator.share({files:[file],title:name});
+    }else{
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+    }
+    fill.style.width='100%'; txt.textContent='İndirildi';
+    show('ok',`${name} kaydedildi.`);
+  }catch(e){
+    if(e.name!=='AbortError') show('err',e.message||'İndirme başarısız.');
+    txt.textContent='Tekrar dene';
+  }finally{
+    clearInterval(tick); busy=false; go.disabled=false;
+    setTimeout(()=>{ fill.style.width='0'; txt.textContent='İndir'; },2500);
+  }
+}
+</script>
+</body>
+</html>

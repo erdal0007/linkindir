@@ -1,0 +1,68 @@
+"""LinkIndir — telefona video indirme servisi (yt-dlp + FastAPI)
+Çalıştır:  pip install -r requirements.txt  &&  uvicorn main:app --host 0.0.0.0 --port 8000
+"""
+import os, re, uuid, tempfile, threading, time
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+import yt_dlp
+
+app = FastAPI(title="LinkIndir")
+TMP = os.path.join(tempfile.gettempdir(), "linkindir")
+os.makedirs(TMP, exist_ok=True)
+
+class Req(BaseModel):
+    url: str
+    mode: str = "video"   # "video" | "audio"
+
+def _opts(mode: str, out: str):
+    base = {"outtmpl": out, "quiet": True, "noplaylist": True, "no_warnings": True}
+    if mode == "audio":
+        base["format"] = "bestaudio/best"
+        base["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
+    else:
+        # Telefonda direkt oynaması için mp4 tercih edilir
+        base["format"] = "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/b[ext=mp4]/best"
+        base["merge_output_format"] = "mp4"
+    return base
+
+@app.post("/api/info")
+def info(r: Req):
+    try:
+        with yt_dlp.YoutubeDL({"quiet": True, "noplaylist": True, "skip_download": True}) as y:
+            i = y.extract_info(r.url, download=False)
+    except Exception as e:
+        raise HTTPException(400, f"Bağlantı okunamadı: {e}")
+    return {
+        "title": i.get("title"),
+        "thumbnail": i.get("thumbnail"),
+        "duration": i.get("duration"),
+        "uploader": i.get("uploader") or i.get("channel"),
+        "site": i.get("extractor_key"),
+    }
+
+@app.post("/api/download")
+def download(r: Req, bg: BackgroundTasks):
+    jid = uuid.uuid4().hex
+    out = os.path.join(TMP, f"{jid}.%(ext)s")
+    try:
+        with yt_dlp.YoutubeDL(_opts(r.mode, out)) as y:
+            i = y.extract_info(r.url, download=True)
+    except Exception as e:
+        raise HTTPException(400, f"İndirilemedi: {e}")
+    files = [f for f in os.listdir(TMP) if f.startswith(jid)]
+    if not files:
+        raise HTTPException(500, "Dosya oluşmadı")
+    path = os.path.join(TMP, files[0])
+    ext = path.rsplit(".", 1)[-1]
+    name = re.sub(r"[^\w\- ]+", "", i.get("title") or "video").strip()[:60] or "video"
+    bg.add_task(_cleanup, path)
+    return FileResponse(path, filename=f"{name}.{ext}", media_type="application/octet-stream")
+
+def _cleanup(path: str):
+    time.sleep(600)  # 10 dk sonra geçici dosyayı sil
+    try: os.remove(path)
+    except OSError: pass
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")

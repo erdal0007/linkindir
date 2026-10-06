@@ -26,3 +26,10 @@ Artık uygulama simgesi gibi açılır; indirilen dosyalar telefonun İndirilenl
 - İndirdiğin içeriğin telif haklarına ve platform kurallarına kendin uymalısın; kendi
   içeriklerin veya izinli içerikler için kullan.
 - yt-dlp'yi ara sıra güncelle:  pip install -U yt-dlp
+
+## Kendi bilgisayarından çalıştırma (ücretsiz, kalıcı)
+- Mac: Terminal'de `bash baslat-mac.sh`
+- Windows: `baslat-windows.bat` dosyasına çift tıkla
+Ekranda çıkan `https://….trycloudflare.com` adresini telefonda aç → Ana Ekrana Ekle.
+Not: Bu adres bilgisayar her yeniden başladığında değişir; sabit adres için
+Cloudflare hesabı + alan adı ile kalıcı tünel kurulabilir.

@@ -19,7 +19,8 @@ class Req(BaseModel):
 
 def _opts(mode: str, out: str):
     base = {"outtmpl": out, "quiet": True, "noplaylist": True, "no_warnings": True}
-    nw = "[format_note!*=atermark]"
+    # Filigransız + iPhone uyumlu (H.264) formatlar; AV1/VP9/HEVC dışarı
+    nw = "[format_note!*=atermark][vcodec!*=av01][vcodec!*=vp0][vcodec!*=hev][vcodec!*=hvc]"
     if mode == "audio":
         if HAS_FFMPEG:
             base["format"] = "bestaudio/best"
@@ -34,7 +35,7 @@ def _opts(mode: str, out: str):
             base["merge_output_format"] = "mp4"
         else:
             base["format"] = f"{single}/b[ext=mp4]/b/best"
-        base["format_sort"] = ["hasvid", "hasaud", "res:1080", "ext:mp4:m4a"]
+        base["format_sort"] = ["hasvid", "hasaud", "vcodec:h264", "acodec:aac", "res:1080", "ext:mp4:m4a"]
     return base
 
 @app.post("/api/info")
@@ -67,6 +68,19 @@ def download(r: Req):
     if not files:
         raise HTTPException(500, "Dosya oluşmadı")
     path = max(files, key=os.path.getsize)
+    # Güvence: video H.264 değilse (veya kodek bilinmiyorsa) iPhone için dönüştür
+    if r.mode != "audio" and HAS_FFMPEG:
+        vc = (i.get("vcodec") or "").lower()
+        if not (vc.startswith("avc") or vc.startswith("h264")):
+            conv = os.path.join(TMP, f"{jid}_h264.mp4")
+            import subprocess
+            res = subprocess.run(["ffmpeg", "-y", "-i", path, "-c:v", "libx264", "-preset", "veryfast",
+                                  "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart", conv],
+                                 capture_output=True)
+            if res.returncode == 0 and os.path.exists(conv):
+                try: os.remove(path)
+                except OSError: pass
+                path = conv
     ext = path.rsplit(".", 1)[-1]
     name = re.sub(r"[^\w\- ]+", "", i.get("title") or "video").strip()[:60] or "video"
     FILES[jid] = (path, f"{name}.{ext}")

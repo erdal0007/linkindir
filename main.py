@@ -23,7 +23,11 @@ def _opts(mode: str, out: str):
         base["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
     else:
         # Telefonda direkt oynaması için mp4 tercih edilir
-        base["format"] = "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/b[ext=mp4]/best"
+        # Filigransız (watermark'sız) sürümü tercih et, mp4 olsun
+        nw = "[format_note!*=atermark]"
+        base["format"] = (f"bv*[ext=mp4][height<=1080]{nw}+ba[ext=m4a]/"
+                          f"b[ext=mp4]{nw}/b{nw}/bv*[ext=mp4]+ba/best")
+        base["format_sort"] = ["hasvid", "res:1080", "ext:mp4:m4a"]
         base["merge_output_format"] = "mp4"
     return base
 

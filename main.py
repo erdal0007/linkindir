@@ -6,7 +6,8 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-import yt_dlp
+import yt_dlp, shutil
+HAS_FFMPEG = shutil.which("ffmpeg") is not None
 
 app = FastAPI(title="LinkIndir")
 TMP = os.path.join(tempfile.gettempdir(), "linkindir")
@@ -18,17 +19,22 @@ class Req(BaseModel):
 
 def _opts(mode: str, out: str):
     base = {"outtmpl": out, "quiet": True, "noplaylist": True, "no_warnings": True}
+    nw = "[format_note!*=atermark]"
     if mode == "audio":
-        base["format"] = "bestaudio/best"
-        base["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
+        if HAS_FFMPEG:
+            base["format"] = "bestaudio/best"
+            base["postprocessors"] = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3"}]
+        else:
+            base["format"] = "ba[ext=m4a]/ba/best"
     else:
-        # Telefonda direkt oynaması için mp4 tercih edilir
-        # Filigransız (watermark'sız) sürümü tercih et, mp4 olsun
-        nw = "[format_note!*=atermark]"
-        base["format"] = (f"bv*[ext=mp4][height<=1080]{nw}+ba[ext=m4a]/"
-                          f"b[ext=mp4]{nw}/b{nw}/bv*[ext=mp4]+ba/best")
-        base["format_sort"] = ["hasvid", "res:1080", "ext:mp4:m4a"]
-        base["merge_output_format"] = "mp4"
+        # Önce TEK PARÇA (görüntü+ses birlikte) mp4; birleştirme ancak ffmpeg varsa
+        single = f"b[ext=mp4][vcodec!*=none][acodec!*=none]{nw}/b[vcodec!*=none][acodec!*=none]{nw}"
+        if HAS_FFMPEG:
+            base["format"] = f"{single}/bv*[ext=mp4]{nw}+ba[ext=m4a]/bv*+ba/best"
+            base["merge_output_format"] = "mp4"
+        else:
+            base["format"] = f"{single}/b[ext=mp4]/b/best"
+        base["format_sort"] = ["hasvid", "hasaud", "res:1080", "ext:mp4:m4a"]
     return base
 
 @app.post("/api/info")
@@ -57,10 +63,10 @@ def download(r: Req):
             i = y.extract_info(r.url, download=True)
     except Exception as e:
         raise HTTPException(400, f"İndirilemedi: {e}")
-    files = [f for f in os.listdir(TMP) if f.startswith(jid)]
+    files = [os.path.join(TMP, f) for f in os.listdir(TMP) if f.startswith(jid)]
     if not files:
         raise HTTPException(500, "Dosya oluşmadı")
-    path = os.path.join(TMP, files[0])
+    path = max(files, key=os.path.getsize)
     ext = path.rsplit(".", 1)[-1]
     name = re.sub(r"[^\w\- ]+", "", i.get("title") or "video").strip()[:60] or "video"
     FILES[jid] = (path, f"{name}.{ext}")

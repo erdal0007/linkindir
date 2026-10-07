@@ -173,16 +173,18 @@ async function start(){
     const m=/filename\*?=(?:UTF-8'')?"?([^";]+)/i.exec(cd);
     const name=m?decodeURIComponent(m[1]):(mode==='audio'?'ses.mp3':'video.mp4');
     const file=new File([blob],name,{type:blob.type});
-    // iPhone'da Dosyalar/Fotoğraflar'a kaydetmek için paylaşım sayfası daha güvenilir
-    if(navigator.canShare && navigator.canShare({files:[file]}) && /iPhone|iPad/.test(navigator.userAgent)){
-      await navigator.share({files:[file],title:name});
-    }else{
-      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
-      document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),120000);
+    // iPhone: Fotoğraflar'a kaydetmek için kullanıcı dokunuşuyla paylaşım penceresi
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      const b=document.createElement('button'); b.className='go'; b.style.marginTop='12px';
+      b.innerHTML='<span class="txt">Fotoğraflar\'a kaydet / Paylaş</span>';
+      b.onclick=()=>navigator.share({files:[file],title:name}).catch(()=>{});
+      msg.after(b); setTimeout(()=>b.remove(),180000);
     }
     fill.style.width='100%'; txt.textContent='İndirildi';
-    show('ok',`${name} kaydedildi.`);
+    show('ok',`${name} Dosyalar › İndirilenler klasörüne kaydedildi.`);
   }catch(e){
     if(e.name!=='AbortError') show('err',e.message||'İndirme başarısız.');
     txt.textContent='Tekrar dene';

@@ -69,4 +69,5 @@ def _cleanup(path: str):
     try: os.remove(path)
     except OSError: pass
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")

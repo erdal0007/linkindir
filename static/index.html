@@ -168,38 +168,33 @@ async function start(){
   busy=true; go.disabled=true; hide();
   txt.textContent='Hazırlanıyor…'; let p=5; fill.style.width=p+'%';
   const tick=setInterval(()=>{ if(p<88){ p+=Math.max(1,(88-p)*.08); fill.style.width=p+'%'; } },500);
-  let step='indirme isteği';
+  let stage='sunucu';
   try{
     const r=await fetch('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u,mode})});
-    if(!r.ok){ step='sunucu hatası'; const t=await r.text(); let d=t; try{ d=JSON.parse(t).detail; }catch{} throw new Error(d||('Hata '+r.status)); }
-    step='dosya alma'; txt.textContent='Telefona kaydediliyor…';
+    if(!r.ok){ let d='Sunucu hatası '+r.status; try{ d=(await r.json()).detail||d; }catch{} throw new Error(d); }
+    stage='dosya alma'; txt.textContent='Telefona kaydediliyor…';
     const blob=await r.blob();
-    step='dosya adı';
-    let name=mode==='audio'?'ses.mp3':'video.mp4';
-    try{
-      const cd=r.headers.get('content-disposition')||'';
-      const m=/filename="?([^";]+)"?/i.exec(cd);
-      if(m) name=m[1].trim();
-    }catch{}
-    name=name.replace(/[\\/:*?"<>|]+/g,'-');
-    step='kaydetme';
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
-    a.style.display='none'; document.body.appendChild(a); a.click();
-    setTimeout(()=>{ a.remove(); URL.revokeObjectURL(a.href); },120000);
-    step='paylaşım düğmesi';
-    let file=null;
-    try{ file=new File([blob],name,{type:mode==='audio'?'audio/mpeg':'video/mp4'}); }catch{}
-    let can=false; try{ can=!!(file&&navigator.canShare&&navigator.canShare({files:[file]})); }catch{}
-    if(can){
-      const b=document.createElement('button'); b.className='go'; b.style.marginTop='12px';
-      const sp=document.createElement('span'); sp.className='txt'; sp.textContent="Fotoğraflar'a kaydet / Paylaş"; b.appendChild(sp);
-      b.onclick=()=>navigator.share({files:[file],title:name}).catch(()=>{});
-      msg.after(b); setTimeout(()=>b.remove(),180000);
-    }
+    stage='isim';
+    let name=(($('#title').textContent||'video').replace(/[^\w\- ]+/g,'').trim().slice(0,60)||'video')+(mode==='audio'?'.mp3':'.mp4');
+    try{ const cd=r.headers.get('Content-Disposition')||''; const m=/filename\*?=(?:utf-8'')?"?([^";]+)/i.exec(cd); if(m) name=decodeURIComponent(m[1]); }catch{}
+    stage='kaydetme';
+    const href=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=href; a.download=name; a.rel='noopener';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(href),120000);
     fill.style.width='100%'; txt.textContent='İndirildi';
-    show('ok',name+' Dosyalar › İndirilenler klasörüne kaydedildi.');
+    show('ok',name+' indirildi. Safari sağ üstteki indirme okuna bak; Fotoğraflar için aşağıdaki düğmeyi kullan.');
+    stage='paylaşım düğmesi';
+    try{
+      if(navigator.share){
+        const b=document.createElement('button'); b.className='go'; b.style.marginTop='12px';
+        b.innerHTML='<span class="txt">Fotoğraflar\'a kaydet / Paylaş</span>';
+        b.onclick=async()=>{ try{ const f=new File([blob],name,{type:mode==='audio'?'audio/mpeg':'video/mp4'}); await navigator.share({files:[f],title:name}); }catch(e){ show('err','Paylaşım açılamadı: '+e.message); } };
+        msg.after(b); setTimeout(()=>b.remove(),180000);
+      }
+    }catch{}
   }catch(e){
-    show('err','['+step+'] '+(e&&e.message?e.message:e));
+    show('err','Hata ('+stage+'): '+(e.message||e));
     txt.textContent='Tekrar dene';
   }finally{
     clearInterval(tick); busy=false; go.disabled=false;

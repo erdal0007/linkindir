@@ -46,8 +46,10 @@ def info(r: Req):
         "site": i.get("extractor_key"),
     }
 
+FILES: dict[str, tuple[str, str]] = {}   # id -> (path, filename)
+
 @app.post("/api/download")
-def download(r: Req, bg: BackgroundTasks):
+def download(r: Req):
     jid = uuid.uuid4().hex
     out = os.path.join(TMP, f"{jid}.%(ext)s")
     try:
@@ -61,11 +63,22 @@ def download(r: Req, bg: BackgroundTasks):
     path = os.path.join(TMP, files[0])
     ext = path.rsplit(".", 1)[-1]
     name = re.sub(r"[^\w\- ]+", "", i.get("title") or "video").strip()[:60] or "video"
-    bg.add_task(_cleanup, path)
-    return FileResponse(path, filename=f"{name}.{ext}", media_type="application/octet-stream")
+    FILES[jid] = (path, f"{name}.{ext}")
+    threading.Thread(target=_cleanup, args=(path, jid), daemon=True).start()
+    return {"id": jid, "name": f"{name}.{ext}", "size": os.path.getsize(path)}
 
-def _cleanup(path: str):
-    time.sleep(600)  # 10 dk sonra geçici dosyayı sil
+@app.get("/api/file/{jid}")
+def get_file(jid: str):
+    item = FILES.get(jid)
+    if not item or not os.path.exists(item[0]):
+        raise HTTPException(404, "Dosya süresi doldu, tekrar indir")
+    path, fname = item
+    mt = "audio/mpeg" if fname.endswith(".mp3") else "video/mp4"
+    return FileResponse(path, filename=fname, media_type=mt)
+
+def _cleanup(path: str, jid: str):
+    time.sleep(1800)  # 30 dk sonra geçici dosyayı sil
+    FILES.pop(jid, None)
     try: os.remove(path)
     except OSError: pass
 
